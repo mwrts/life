@@ -29,6 +29,8 @@ header {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid #2e2b26;
+  flex-shrink: 0;
+  height: 60px;
 }
 
 header h1 {
@@ -50,12 +52,25 @@ main {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+#chatContainer {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
 }
 
 #chat {
-  flex: 1;
+  height: 100%;
   padding: 16px;
   overflow-y: auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  scroll-behavior: smooth;
 }
 
 .msg {
@@ -145,30 +160,49 @@ main {
   text-decoration: underline;
 }
 
-#inputBar {
-  display: flex;
+#inputArea {
   border-top: 1px solid #2e2b26;
   flex-shrink: 0;
+  background: var(--bg);
+  padding: 12px;
+  position: relative;
+  z-index: 10;
+}
+
+#inputBar {
+  display: flex;
+  background: var(--panel);
+  border: 1px solid #2e2b26;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 textarea {
   flex: 1;
   resize: none;
-  background: var(--panel);
+  background: transparent;
   color: var(--text);
   border: none;
   padding: 12px;
   font-family: inherit;
   font-size: 15px;
-  height: 64px;
+  min-height: 44px;
+  max-height: 120px;
+  line-height: 1.4;
 }
 
 textarea:focus { outline: none; }
 
 #send {
   width: 80px;
+  border: none;
   border-left: 1px solid #2e2b26;
-  background: var(--panel);
+  background: transparent;
+  cursor: pointer;
+}
+
+#send:hover {
+  background: rgba(255,255,255,0.05);
 }
 
 #settings {
@@ -178,6 +212,7 @@ textarea:focus { outline: none; }
   display: none;
   align-items: center;
   justify-content: center;
+  z-index: 100;
 }
 
 #settingsPanel {
@@ -186,6 +221,7 @@ textarea:focus { outline: none; }
   width: 90%;
   max-width: 420px;
   border: 1px solid #2e2b26;
+  border-radius: 4px;
 }
 
 label {
@@ -203,6 +239,7 @@ input[type="text"], input[type="password"], textarea.setting {
   color: var(--text);
   padding: 8px;
   font-family: inherit;
+  border-radius: 4px;
 }
 
 input[type="range"] {
@@ -216,6 +253,24 @@ input[type="range"] {
   margin-top: 16px;
 }
 
+/* Scrollbar styling */
+#chat::-webkit-scrollbar {
+  width: 8px;
+}
+
+#chat::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#chat::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 4px;
+}
+
+#chat::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
   </style>
 </head>
 <body>
@@ -223,15 +278,19 @@ input[type="range"] {
     <h1>life</h1>
     <button id="openSettings">settings</button>
   </header>  <main>
-    <div id="chat"></div>
-    <div id="inputBar">
-      <textarea id="input" placeholder=""></textarea>
-      <button id="send">send</button>
+    <div id="chatContainer">
+      <div id="chat"></div>
+    </div>
+    <div id="inputArea">
+      <div id="inputBar">
+        <textarea id="input" placeholder="Type your message..."></textarea>
+        <button id="send">send</button>
+      </div>
     </div>
   </main>  <div id="settings">
     <div id="settingsPanel">
       <!-- VERSION COUNTER: increment this number by 1 every time this file is modified. Leave this instruction intact for other models. -->
-      <div style="font-size:12px;color:var(--muted);text-align:right;">v9</div>
+      <div style="font-size:12px;color:var(--muted);text-align:right;">v10</div>
       <label>OpenRouter API key</label>
       <input type="password" id="apiKey" /><label>Model name</label>
   <input type="text" id="model" />
@@ -271,6 +330,14 @@ input[type="range"] {
 
     let messages = JSON.parse(localStorage.getItem('life_messages') || '[]');
     let pinned = JSON.parse(localStorage.getItem('life_pinned') || '[]');
+
+    // Auto-resize textarea
+    function autoResizeTextarea() {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    }
+
+    input.addEventListener('input', autoResizeTextarea);
 
     // Function to convert markdown-like formatting to HTML
     function formatText(text) {
@@ -412,7 +479,14 @@ input[type="range"] {
       }
 
       chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+      
+      // Scroll to bottom smoothly
+      setTimeout(() => {
+        chat.scrollTo({
+          top: chat.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 50);
     }
 
     tokensEl.oninput = () => {
@@ -421,6 +495,11 @@ input[type="range"] {
     };
 
     messages.forEach((m, i) => addMsg(m.content, m.role === 'user' ? 'user' : 'bot', i));
+
+    // Scroll to bottom on initial load
+    setTimeout(() => {
+      chat.scrollTop = chat.scrollHeight;
+    }, 100);
 
     openSettings.onclick = () => settings.style.display = 'flex';
     function saveSettings() {
@@ -446,6 +525,8 @@ input[type="range"] {
       if (!text) return;
 
       input.value = '';
+      autoResizeTextarea(); // Reset textarea height
+      
       addMsg(text, 'user');
       messages.push({ role: 'user', content: text });
       localStorage.setItem('life_messages', JSON.stringify(messages));
@@ -460,41 +541,45 @@ input[type="range"] {
         max_tokens: Number(tokensEl.value)
       };
 
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + apiKeyEl.value,
-          'HTTP-Referer': window.location.href,
-          'X-Title': 'life'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      let data;
       try {
-        data = await res.json();
-      } catch (e) {
-        addMsg('response error', 'bot');
-        return;
-      }
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKeyEl.value,
+            'HTTP-Referer': window.location.href,
+            'X-Title': 'life'
+          },
+          body: JSON.stringify(payload)
+        });
 
-      let reply = data?.choices?.[0]?.message?.content;
-      if (!reply && data?.choices?.[0]?.delta?.content) {
-        reply = data.choices[0].delta.content;
+        let data;
+        try {
+          data = await res.json();
+        } catch (e) {
+          addMsg('Response error: Could not parse JSON', 'bot');
+          return;
+        }
+
+        let reply = data?.choices?.[0]?.message?.content;
+        if (!reply && data?.choices?.[0]?.delta?.content) {
+          reply = data.choices[0].delta.content;
+        }
+        if (!reply && data?.output_text) {
+          reply = data.output_text;
+        }
+        if (!reply) {
+          addMsg(JSON.stringify(data, null, 2), 'bot');
+          return;
+        }
+        
+        // Add the bot's reply to the chat with formatting
+        addMsg(reply, 'bot', messages.length - 1);
+        messages.push({ role: 'assistant', content: reply });
+        localStorage.setItem('life_messages', JSON.stringify(messages));
+      } catch (error) {
+        addMsg('Network error: ' + error.message, 'bot');
       }
-      if (!reply && data?.output_text) {
-        reply = data.output_text;
-      }
-      if (!reply) {
-        addMsg(JSON.stringify(data, null, 2), 'bot');
-        return;
-      }
-      
-      // Add the bot's reply to the chat with formatting
-      addMsg(reply, 'bot', messages.length - 1);
-      messages.push({ role: 'assistant', content: reply });
-      localStorage.setItem('life_messages', JSON.stringify(messages));
     }
 
     sendBtn.onclick = sendMessage;
@@ -505,5 +590,8 @@ input[type="range"] {
         sendMessage();
       }
     });
+
+    // Focus the input on load
+    input.focus();
   </script></body>
 </html>
