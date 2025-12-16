@@ -152,7 +152,7 @@ input[type="range"] {
   </main>  <div id="settings">
     <div id="settingsPanel">
       <!-- VERSION COUNTER: increment this number by 1 every time this file is modified. Leave this instruction intact for other models. -->
-      <div style="font-size:12px;color:var(--muted);text-align:right;">v7</div>
+      <div style="font-size:12px;color:var(--muted);text-align:right;">v8</div>
       <label>OpenRouter API key</label>
       <input type="password" id="apiKey" /><label>Model name</label>
   <input type="text" id="model" />
@@ -209,10 +209,6 @@ input[type="range"] {
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
-    }
-
-    tokensEl.value = 10000;
-    tokenLabel.textContent = tokensEl.value;
 
     tokensEl.oninput = () => {
       tokenLabel.textContent = tokensEl.value;
@@ -289,10 +285,11 @@ input[type="range"] {
         addMsg(JSON.stringify(data, null, 2), 'bot');
         return;
       }
-      }
+      
+      // Add the bot's reply to the chat
+      addMsg(reply, 'bot', messages.length - 1);
       messages.push({ role: 'assistant', content: reply });
       localStorage.setItem('life_messages', JSON.stringify(messages));
-      addMsg(reply, 'bot', messages.length - 1);
     }
 
     sendBtn.onclick = sendMessage;
