@@ -181,12 +181,22 @@ input[type="range"] {
     const tokensEl = document.getElementById('tokens');
     const tokenLabel = document.getElementById('tokenLabel');
 
-    let messages = [];
+    let messages = JSON.parse(localStorage.getItem('life_messages') || '[]');
+    let pinned = JSON.parse(localStorage.getItem('life_pinned') || '[]');
 
-    function addMsg(text, cls) {
+    function addMsg(text, cls, index = null) {
       const div = document.createElement('div');
       div.className = 'msg ' + cls;
       div.textContent = text;
+
+      if (cls === 'bot' && index !== null) {
+        div.style.cursor = 'pointer';
+        div.onclick = () => {
+          pinned.push(text);
+          localStorage.setItem('life_pinned', JSON.stringify(pinned));
+        };
+      }
+
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
@@ -195,6 +205,8 @@ input[type="range"] {
     tokenLabel.textContent = tokensEl.value;
 
     tokensEl.oninput = () => tokenLabel.textContent = tokensEl.value;
+
+    messages.forEach((m, i) => addMsg(m.content, m.role === 'user' ? 'user' : 'bot', i));
 
     openSettings.onclick = () => settings.style.display = 'flex';
     closeSettings.onclick = () => settings.style.display = 'none';
@@ -206,11 +218,13 @@ input[type="range"] {
       input.value = '';
       addMsg(text, 'user');
       messages.push({ role: 'user', content: text });
+      localStorage.setItem('life_messages', JSON.stringify(messages));
 
       const payload = {
         model: modelEl.value,
         messages: [
           ...(systemMsgEl.value ? [{ role: 'system', content: systemMsgEl.value }] : []),
+          ...pinned.map(p => ({ role: 'system', content: p })),
           ...messages
         ],
         max_tokens: Number(tokensEl.value)
@@ -228,7 +242,8 @@ input[type="range"] {
       const data = await res.json();
       const reply = data.choices?.[0]?.message?.content || '';
       messages.push({ role: 'assistant', content: reply });
-      addMsg(reply, 'bot');
+      localStorage.setItem('life_messages', JSON.stringify(messages));
+      addMsg(reply, 'bot', messages.length - 1);
     }
 
     sendBtn.onclick = sendMessage;
