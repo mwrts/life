@@ -151,6 +151,255 @@ input[type="range"] {
     </div>
   </main>  <div id="settings">
     <div id="settingsPanel">
+      <!-- VERSION COUNTER: increment this number by 1 every time this file is modified. Leave this instruction intact for other models. -->
+      <div style="font-size:12px;color:var(--muted);text-align:right;">v7</div>
+      <label>OpenRouter API key</label>
+      <input type="password" id="apiKey" /><label>Model name</label>
+  <input type="text" id="model" />
+
+  <label>Fixed system message</label>
+  <textarea class="setting" id="systemMsg" rows="4"></textarea>
+
+  <label>Token limit: <span id="tokenLabel"></span></label>
+  <input type="range" id="tokens" min="10000" max="128000" step="1000" />
+
+  <div class="row">
+    <button id="closeSettings">close</button>
+  </div>
+</div>
+
+  </div>  <script>
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+
+    const settings = document.getElementById('settings');
+    const openSettings = document.getElementById('openSettings');
+    const closeSettings = document.getElementById('closeSettings');
+
+    const apiKeyEl = document.getElementById('apiKey');
+    const modelEl = document.getElementById('model');
+    const systemMsgEl = document.getElementById('systemMsg');
+    const tokensEl = document.getElementById('tokens');
+    const tokenLabel = document.getElementById('tokenLabel');
+
+    const savedSettings = JSON.parse(localStorage.getItem('life_settings') || '{}');
+    if (savedSettings.apiKey) apiKeyEl.value = savedSettings.apiKey;
+    if (savedSettings.model) modelEl.value = savedSettings.model;
+    if (savedSettings.systemMsg) systemMsgEl.value = savedSettings.systemMsg;
+    if (savedSettings.tokens) tokensEl.value = savedSettings.tokens;
+    tokenLabel.textContent = tokensEl.value;
+
+    let messages = JSON.parse(localStorage.getItem('life_messages') || '[]');
+    let pinned = JSON.parse(localStorage.getItem('life_pinned') || '[]');
+
+    function addMsg(text, cls, index = null) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + cls;
+      div.textContent = text;
+
+      if (cls === 'bot' && index !== null) {
+        div.style.cursor = 'pointer';
+        div.onclick = () => {
+          pinned.push(text);
+          localStorage.setItem('life_pinned', JSON.stringify(pinned));
+        };
+      }
+
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    tokensEl.value = 10000;
+    tokenLabel.textContent = tokensEl.value;
+
+    tokensEl.oninput = () => {
+      tokenLabel.textContent = tokensEl.value;
+      saveSettings();
+    };
+
+    messages.forEach((m, i) => addMsg(m.content, m.role === 'user' ? 'user' : 'bot', i));
+
+    openSettings.onclick = () => settings.style.display = 'flex';
+    function saveSettings() {
+      localStorage.setItem('life_settings', JSON.stringify({
+        apiKey: apiKeyEl.value,
+        model: modelEl.value,
+        systemMsg: systemMsgEl.value,
+        tokens: tokensEl.value
+      }));
+    }
+
+    [apiKeyEl, modelEl, systemMsgEl].forEach(el => {
+      el.addEventListener('change', saveSettings);
+    });
+
+    closeSettings.onclick = () => {
+      saveSettings();
+      settings.style.display = 'none';
+    };
+
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+      addMsg(text, 'user');
+      messages.push({ role: 'user', content: text });
+      localStorage.setItem('life_messages', JSON.stringify(messages));
+
+      const payload = {
+        model: modelEl.value,
+        messages: [
+          ...(systemMsgEl.value ? [{ role: 'system', content: systemMsgEl.value }] : []),
+          ...pinned.map(p => ({ role: 'system', content: p })),
+          ...messages
+        ],
+        max_tokens: Number(tokensEl.value)
+      };
+
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + apiKeyEl.value
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || '';
+      messages.push({ role: 'assistant', content: reply });
+      localStorage.setItem('life_messages', JSON.stringify(messages));
+      addMsg(reply, 'bot', messages.length - 1);
+    }
+
+    sendBtn.onclick = sendMessage;
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script></body>
+</html>  margin: 0;
+}
+
+button {
+  background: none;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+#chat {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.msg {
+  margin-bottom: 14px;
+  line-height: 1.4;
+}
+
+.user { color: var(--text); }
+.bot { color: var(--muted); }
+
+#inputBar {
+  display: flex;
+  border-top: 1px solid #2e2b26;
+  flex-shrink: 0;
+}
+
+textarea {
+  flex: 1;
+  resize: none;
+  background: var(--panel);
+  color: var(--text);
+  border: none;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 15px;
+  height: 64px;
+}
+
+textarea:focus { outline: none; }
+
+#send {
+  width: 80px;
+  border-left: 1px solid #2e2b26;
+  background: var(--panel);
+}
+
+#settings {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#settingsPanel {
+  background: var(--panel);
+  padding: 20px;
+  width: 90%;
+  max-width: 420px;
+  border: 1px solid #2e2b26;
+}
+
+label {
+  display: block;
+  font-size: 14px;
+  margin-top: 12px;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+input[type="text"], input[type="password"], textarea.setting {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid #2e2b26;
+  color: var(--text);
+  padding: 8px;
+  font-family: inherit;
+}
+
+input[type="range"] {
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+}
+
+  </style>
+</head>
+<body>
+  <header>
+    <h1>life</h1>
+    <button id="openSettings">settings</button>
+  </header>  <main>
+    <div id="chat"></div>
+    <div id="inputBar">
+      <textarea id="input" placeholder=""></textarea>
+      <button id="send">send</button>
+    </div>
+  </main>  <div id="settings">
+    <div id="settingsPanel">
       <label>OpenRouter API key</label>
       <input type="password" id="apiKey" /><label>Model name</label>
   <input type="text" id="model" />
