@@ -262,13 +262,26 @@ input[type="range"] {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + apiKeyEl.value
+          'Authorization': 'Bearer ' + apiKeyEl.value,
+          'HTTP-Referer': window.location.href,
+          'X-Title': 'life'
         },
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content || '';
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        addMsg('response error', 'bot');
+        return;
+      }
+
+      const reply = data?.choices?.[0]?.message?.content;
+      if (!reply) {
+        addMsg('no content returned', 'bot');
+        return;
+      }
       messages.push({ role: 'assistant', content: reply });
       localStorage.setItem('life_messages', JSON.stringify(messages));
       addMsg(reply, 'bot', messages.length - 1);
